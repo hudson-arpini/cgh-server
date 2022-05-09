@@ -23,11 +23,11 @@ router.post("/signup", async (req, res) => {
 
     const salt = await bcrypt.genSalt(saltRounds);
     const passwordHash = await bcrypt.hash(password, salt);
+    const accountNumber = Math.floor(Math.random()*100000)
 
-    const createdUser = await UserModel.create({
-      ...req.body,
-      passwordHash: passwordHash,
-    });
+    const createdUser = await UserModel.create(
+      { ...req.body, passwordHash:passwordHash, accountNumber: accountNumber},
+    );
 
     delete createdUser._doc.passwordHash;
 
@@ -72,11 +72,11 @@ router.get("/profile", isAuth, attachCurrentUser, (req, res) => {
 router.patch("/update-profile", isAuth, attachCurrentUser, async (req, res) => {
   try {
     const loggedInUser = req.currentUser;
-
+    console.log(req.body, "REq.Body")
     const updatedUser = await UserModel.findOneAndUpdate(
       { _id: loggedInUser._id },
       { ...req.body },
-      { runValidators: true, new: true }
+      { runValidators:true, new:true }
     );
 
     delete updatedUser._doc.passwordHash;
@@ -88,7 +88,6 @@ router.patch("/update-profile", isAuth, attachCurrentUser, async (req, res) => {
   }
 });
 
-//SOFT DELETE
 
 router.delete(
   "/disable-profile",
@@ -96,8 +95,9 @@ router.delete(
   attachCurrentUser,
   async (req, res) => {
     try {
+      const loggedInUser = req.currentUser
       const disabledUser = await UserModel.findOneAndUpdate(
-        { _id: req.currentUser._id },
+        { _id: loggedInUser._id },
         { isActive: false, disabledOn: Date.now() },
         { runValidators: true, new: true }
       );
@@ -111,5 +111,40 @@ router.delete(
     }
   }
 );
+
+router.patch(
+  "/transfer",
+  isAuth,
+  attachCurrentUser,
+  async (req,res) => {
+    try{
+      const loggedInUser = req.currentUser
+
+      if((loggedInUser.balance - req.body.amount)<0) {return res.status(406).json({message:"Saldo Insuficiente"})}
+
+
+      const sendingUser = await UserModel.findOneAndUpdate(
+        { _id: loggedInUser._id },
+        { balance: loggedInUser.balance - req.body.amount},
+        { runValidators: true, new: true }
+      )
+
+      const receiver = await UserModel.findOne({ accountNumber: req.body.receiver })
+      const receivingUser = await UserModel.findOneAndUpdate(
+        { accountNumber: req.body.receiver },
+        { balance: receiver.balance + req.body.amount},
+        { runValidators: true, new: true }
+      )
+
+      delete sendingUser._doc.passwordHash;
+
+      return res.status(200).json(sendingUser)
+    }
+    catch (error) {
+      console.log(error);
+      return res.status(500).json(error);
+    }
+  }
+)
 
 module.exports = router;

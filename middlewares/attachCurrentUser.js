@@ -4,7 +4,7 @@ module.exports = async (req, res, next) => {
   try {
     const loggedInUser = req.auth;
     console.log(loggedInUser);
-
+    console.log(req.body, "REQ.BODy 2")
     const user = await UserModel.findOne(
       { _id: loggedInUser._id },
       { passwordHash: 0 }
